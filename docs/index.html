@@ -1,0 +1,716 @@
+//
+//  JournalApp.swift
+//  Persönliches Journal
+//
+
+import SwiftUI
+import PencilKit
+
+// MARK: - Main App
+@main
+struct JournalApp: App {
+    @StateObject private var dataManager = DataManager()
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(dataManager)
+        }
+    }
+}
+
+// MARK: - Models
+struct JournalEntry: Identifiable, Codable {
+    var id = UUID()
+    var title: String
+    var date: Date
+    var content: String
+    var tags: [String]
+    var links: [JournalLink]
+    var imageData: [Data]
+    var drawingData: Data?
+    
+    init(title: String = "Neuer Eintrag", date: Date = Date(), content: String = "", tags: [String] = [], links: [JournalLink] = [], imageData: [Data] = [], drawingData: Data? = nil) {
+        self.title = title
+        self.date = date
+        self.content = content
+        self.tags = tags
+        self.links = links
+        self.imageData = imageData
+        self.drawingData = drawingData
+    }
+}
+
+struct JournalLink: Identifiable, Codable {
+    var id = UUID()
+    var title: String
+    var url: String
+}
+
+// MARK: - Data Manager
+class DataManager: ObservableObject {
+    @Published var entries: [JournalEntry] = []
+    
+    private let saveKey = "JournalEntries"
+    
+    init() {
+        loadEntries()
+        
+        // Demo-Einträge beim ersten Start
+        if entries.isEmpty {
+            addDemoEntries()
+        }
+    }
+    
+    func addEntry(_ entry: JournalEntry) {
+        entries.insert(entry, at: 0)
+        saveEntries()
+    }
+    
+    func updateEntry(_ entry: JournalEntry) {
+        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+            entries[index] = entry
+            saveEntries()
+        }
+    }
+    
+    func deleteEntry(_ entry: JournalEntry) {
+        entries.removeAll { $0.id == entry.id }
+        saveEntries()
+    }
+    
+    private func saveEntries() {
+        if let encoded = try? JSONEncoder().encode(entries) {
+            UserDefaults.standard.set(encoded, forKey: saveKey)
+        }
+    }
+    
+    private func loadEntries() {
+        if let data = UserDefaults.standard.data(forKey: saveKey),
+           let decoded = try? JSONDecoder().decode([JournalEntry].self, from: data) {
+            entries = decoded
+        }
+    }
+    
+    private func addDemoEntries() {
+        let demo1 = JournalEntry(
+            title: "Willkommen",
+            date: Date(),
+            content: "Dies ist dein erstes Journal. Hier kannst du Gedanken festhalten, zeichnen und Erinnerungen sammeln.",
+            tags: ["Start", "Willkommen"]
+        )
+        
+        let demo2 = JournalEntry(
+            title: "Ideen",
+            date: Date().addingTimeInterval(-86400),
+            content: "Notiere hier deine Ideen und kreative Gedanken.",
+            tags: ["Ideen", "Kreativität"]
+        )
+        
+        entries = [demo1, demo2]
+        saveEntries()
+    }
+}
+
+// MARK: - Main Views
+struct ContentView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @State private var showingAddEntry = false
+    @State private var viewMode: ViewMode = .list
+    
+    enum ViewMode {
+        case list, book
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                // View Mode Picker
+                Picker("Ansicht", selection: $viewMode) {
+                    Text("Liste").tag(ViewMode.list)
+                    Text("Buch").tag(ViewMode.book)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+                
+                if viewMode == .list {
+                    ListView()
+                } else {
+                    BookView()
+                }
+            }
+            .navigationTitle("Mein Journal")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingAddEntry = true }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddEntry) {
+                EntryEditView(entry: JournalEntry())
+            }
+        }
+    }
+}
+
+// MARK: - List View
+struct ListView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @State private var searchText = ""
+    
+    var filteredEntries: [JournalEntry] {
+        if searchText.isEmpty {
+            return dataManager.entries
+        }
+        return dataManager.entries.filter { entry in
+            entry.title.localizedCaseInsensitiveContains(searchText) ||
+            entry.content.localizedCaseInsensitiveContains(searchText) ||
+            entry.tags.contains(where: { $0.localizedCaseInsensitiveContains(searchText) })
+        }
+    }
+    
+    var body: some View {
+        List {
+            ForEach(filteredEntries) { entry in
+                NavigationLink(destination: EntryDetailView(entry: entry)) {
+                    EntryRow(entry: entry)
+                }
+            }
+            .onDelete(perform: deleteEntry)
+        }
+        .searchable(text: $searchText, prompt: "Suche...")
+    }
+    
+    private func deleteEntry(at offsets: IndexSet) {
+        offsets.forEach { index in
+            let entry = filteredEntries[index]
+            dataManager.deleteEntry(entry)
+        }
+    }
+}
+
+struct EntryRow: View {
+    let entry: JournalEntry
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(entry.title)
+                .font(.headline)
+            
+            Text(entry.content)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+            
+            HStack {
+                Text(entry.date, style: .date)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                ForEach(entry.tags.prefix(3), id: \.self) { tag in
+                    TagBadge(tag: tag)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Book View
+struct BookView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @State private var currentPage = 0
+    
+    var body: some View {
+        if dataManager.entries.isEmpty {
+            VStack(spacing: 20) {
+                Image(systemName: "book.closed")
+                    .font(.system(size: 60))
+                    .foregroundColor(.secondary)
+                Text("Noch keine Einträge")
+                    .font(.title2)
+                    .foregroundColor(.secondary)
+            }
+        } else {
+            TabView(selection: $currentPage) {
+                ForEach(Array(dataManager.entries.enumerated()), id: \.element.id) { index, entry in
+                    BookPageView(entry: entry, pageNumber: index + 1, totalPages: dataManager.entries.count)
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .always))
+        }
+    }
+}
+
+struct BookPageView: View {
+    let entry: JournalEntry
+    let pageNumber: Int
+    let totalPages: Int
+    
+    var body: some View {
+        NavigationLink(destination: EntryDetailView(entry: entry)) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(UIColor.systemBackground))
+                    .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(entry.title)
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text(entry.date, style: .date)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Divider()
+                    
+                    ScrollView {
+                        Text(entry.content)
+                            .font(.body)
+                    }
+                    
+                    if !entry.tags.isEmpty {
+                        HStack {
+                            ForEach(entry.tags.prefix(4), id: \.self) { tag in
+                                TagBadge(tag: tag)
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Seite \(pageNumber) von \(totalPages)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .padding(30)
+            }
+            .padding()
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Entry Detail View
+struct EntryDetailView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @State var entry: JournalEntry
+    @State private var showingEditView = false
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(entry.title)
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text(entry.date, style: .date)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Divider()
+                
+                // Content
+                Text(entry.content)
+                    .font(.body)
+                
+                // Images
+                if !entry.imageData.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Bilder")
+                            .font(.headline)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(Array(entry.imageData.enumerated()), id: \.offset) { _, data in
+                                    if let uiImage = UIImage(data: data) {
+                                        Image(uiImage: uiImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 200, height: 200)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Drawing
+                if let drawingData = entry.drawingData,
+                   let drawing = try? PKDrawing(data: drawingData) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Zeichnung")
+                            .font(.headline)
+                        
+                        Image(uiImage: drawing.image(from: drawing.bounds, scale: 1.0))
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 300)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                
+                // Links
+                if !entry.links.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Links")
+                            .font(.headline)
+                        
+                        ForEach(entry.links) { link in
+                            Link(destination: URL(string: link.url)!) {
+                                HStack {
+                                    Image(systemName: "link")
+                                    Text(link.title)
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right")
+                                }
+                                .padding()
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+                
+                // Tags
+                if !entry.tags.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Tags")
+                            .font(.headline)
+                        
+                        FlowLayout(spacing: 8) {
+                            ForEach(entry.tags, id: \.self) { tag in
+                                TagBadge(tag: tag)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding()
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Bearbeiten") {
+                    showingEditView = true
+                }
+            }
+        }
+        .sheet(isPresented: $showingEditView) {
+            EntryEditView(entry: entry)
+        }
+    }
+}
+
+// MARK: - Entry Edit View
+struct EntryEditView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.presentationMode) var presentationMode
+    
+    @State var entry: JournalEntry
+    @State private var isNewEntry: Bool
+    @State private var showingImagePicker = false
+    @State private var showingDrawingView = false
+    @State private var newTagText = ""
+    @State private var newLinkTitle = ""
+    @State private var newLinkURL = ""
+    
+    init(entry: JournalEntry) {
+        _entry = State(initialValue: entry)
+        _isNewEntry = State(initialValue: entry.content.isEmpty && entry.title == "Neuer Eintrag")
+    }
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Grundinformationen") {
+                    TextField("Titel", text: $entry.title)
+                    DatePicker("Datum", selection: $entry.date, displayedComponents: .date)
+                    
+                    VStack(alignment: .leading) {
+                        Text("Inhalt")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $entry.content)
+                            .frame(minHeight: 150)
+                    }
+                }
+                
+                Section("Medien") {
+                    Button(action: { showingImagePicker = true }) {
+                        Label("Bild hinzufügen", systemImage: "photo")
+                    }
+                    
+                    Button(action: { showingDrawingView = true }) {
+                        Label("Zeichnung", systemImage: "pencil.tip.crop.circle")
+                    }
+                    
+                    if !entry.imageData.isEmpty {
+                        Text("\(entry.imageData.count) Bild(er) hinzugefügt")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if entry.drawingData != nil {
+                        HStack {
+                            Text("Zeichnung vorhanden")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Entfernen") {
+                                entry.drawingData = nil
+                            }
+                            .font(.caption)
+                            .foregroundColor(.red)
+                        }
+                    }
+                }
+                
+                Section("Tags") {
+                    HStack {
+                        TextField("Neuer Tag", text: $newTagText)
+                        Button("Hinzufügen") {
+                            if !newTagText.isEmpty {
+                                entry.tags.append(newTagText)
+                                newTagText = ""
+                            }
+                        }
+                    }
+                    
+                    if !entry.tags.isEmpty {
+                        FlowLayout(spacing: 8) {
+                            ForEach(entry.tags, id: \.self) { tag in
+                                TagBadge(tag: tag, onDelete: {
+                                    entry.tags.removeAll { $0 == tag }
+                                })
+                            }
+                        }
+                    }
+                }
+                
+                Section("Links") {
+                    VStack(spacing: 8) {
+                        TextField("Titel", text: $newLinkTitle)
+                        TextField("URL", text: $newLinkURL)
+                        Button("Link hinzufügen") {
+                            if !newLinkTitle.isEmpty && !newLinkURL.isEmpty {
+                                entry.links.append(JournalLink(title: newLinkTitle, url: newLinkURL))
+                                newLinkTitle = ""
+                                newLinkURL = ""
+                            }
+                        }
+                    }
+                    
+                    ForEach(entry.links) { link in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(link.title)
+                                    .font(.caption)
+                                Text(link.url)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Button(action: {
+                                entry.links.removeAll { $0.id == link.id }
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(isNewEntry ? "Neuer Eintrag" : "Bearbeiten")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Abbrechen") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Speichern") {
+                        if isNewEntry {
+                            dataManager.addEntry(entry)
+                        } else {
+                            dataManager.updateEntry(entry)
+                        }
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+            .sheet(isPresented: $showingImagePicker) {
+                ImagePicker(imageData: $entry.imageData)
+            }
+            .sheet(isPresented: $showingDrawingView) {
+                DrawingView(drawingData: $entry.drawingData)
+            }
+        }
+    }
+}
+
+// MARK: - Drawing View
+struct DrawingView: View {
+    @Environment(\.presentationMode) var presentationMode
+    @Binding var drawingData: Data?
+    @State private var canvas = PKCanvasView()
+    @State private var drawing = PKDrawing()
+    
+    var body: some View {
+        NavigationView {
+            CanvasView(canvas: $canvas, drawing: $drawing, onSave: { data in
+                drawingData = data
+            })
+            .navigationTitle("Zeichnung")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Abbrechen") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Fertig") {
+                        drawingData = drawing.dataRepresentation()
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct CanvasView: UIViewRepresentable {
+    @Binding var canvas: PKCanvasView
+    @Binding var drawing: PKDrawing
+    let onSave: (Data) -> Void
+    
+    func makeUIView(context: Context) -> PKCanvasView {
+        canvas.drawingPolicy = .anyInput
+        canvas.tool = PKInkingTool(.pen, color: .black, width: 2)
+        canvas.drawing = drawing
+        return canvas
+    }
+    
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        drawing = uiView.drawing
+    }
+}
+
+// MARK: - Image Picker
+struct ImagePicker: UIViewControllerRepresentable {
+    @Environment(\.presentationMode) var presentationMode
+    @Binding var imageData: [Data]
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage,
+               let data = image.jpegData(compressionQuality: 0.8) {
+                parent.imageData.append(data)
+            }
+            parent.presentationMode.wrappedValue.dismiss()
+        }
+    }
+}
+
+// MARK: - Helper Views
+struct TagBadge: View {
+    let tag: String
+    var onDelete: (() -> Void)? = nil
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(tag)
+                .font(.caption)
+            
+            if let onDelete = onDelete {
+                Button(action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color.blue.opacity(0.2))
+        .foregroundColor(.blue)
+        .cornerRadius(12)
+    }
+}
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(in: proposal.replacingUnspecifiedDimensions().width, subviews: subviews, spacing: spacing)
+        return result.size
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.frames[index].minX, y: bounds.minY + result.frames[index].minY), proposal: .unspecified)
+        }
+    }
+    
+    struct FlowResult {
+        var frames: [CGRect] = []
+        var size: CGSize = .zero
+        
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var x: CGFloat = 0
+            var y: CGFloat = 0
+            var lineHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                
+                if x + size.width > maxWidth && x > 0 {
+                    x = 0
+                    y += lineHeight + spacing
+                    lineHeight = 0
+                }
+                
+                frames.append(CGRect(x: x, y: y, width: size.width, height: size.height))
+                lineHeight = max(lineHeight, size.height)
+                x += size.width + spacing
+            }
+            
+            self.size = CGSize(width: maxWidth, height: y + lineHeight)
+        }
+    }
+}
