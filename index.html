@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#4A90E2">
+    <title>Mein Journal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 10px;
+            background: #f0f0f0;
+            padding: 5px;
+            border-radius: 10px;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .view-btn.active {
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #4A90E2;
+            color: white;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(74, 144, 226, 0.4);
+            z-index: 100;
+        }
+
+        .search-bar {
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .entries-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .entry-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .entry-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .entry-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .entry-card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .entry-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .entry-date {
+            color: #999;
+            font-size: 14px;
+        }
+
+        .tags {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            background: #E3F2FD;
+            color: #1976D2;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+
+        .book-view {
+            min-height: 600px;
+        }
+
+        .book-page {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            min-height: 600px;
+            animation: pageFlip 0.5s ease-out;
+        }
+
+        @keyframes pageFlip {
+            from {
+                opacity: 0;
+                transform: rotateY(-20deg);
+            }
+            to {
+                opacity: 1;
+                transform: rotateY(0);
+            }
+        }
+
+        .page-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .page-btn {
+            padding: 10px 20px;
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .page-btn:disabled {
+            background: #ccc;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            min-height: 150px;
+        }
+
+        .drawing-canvas {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: crosshair;
+            touch-action: none;
+            background: white;
+            width: 100%;
+        }
+
+        .canvas-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .canvas-btn {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .color-option.active {
+            border-color: #333;
+        }
+
+        .tag-input-wrapper {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .tag-input-wrapper input {
+            flex: 1;
+        }
+
+        .tag-input-wrapper button {
+            padding: 12px 20px;
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .tags-display {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .tag-item {
+            background: #E3F2FD;
+            color: #1976D2;
+            padding: 8px 12px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tag-remove {
+            background: none;
+            border: none;
+            color: #1976D2;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 15px;
+            background: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .image-preview {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .image-preview img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 10px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        .entry-images {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+
+        .entry-images img {
+            height: 150px;
+            border-radius: 10px;
+        }
+
+        .entry-drawing img {
+            width: 100%;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .links-list {
+            margin-top: 15px;
+        }
+
+        .link-item {
+            background: #E3F2FD;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .link-item a {
+            color: #1976D2;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📖 Mein Journal</h1>
+            <div class="view-toggle">
+                <button class="view-btn active" data-view="list">Liste</button>
+                <button class="view-btn" data-view="book">Buch</button>
+            </div>
+        </div>
+
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="🔍 Suche...">
+        </div>
+
+        <div id="listView" class="entries-list"></div>
+        <div id="bookView" class="book-view" style="display: none;"></div>
+    </div>
+
+    <button class="add-btn" id="addBtn">+</button>
+
+    <div id="entryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Neuer Eintrag</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+
+            <div class="form-group">
+                <label>Titel</label>
+                <input type="text" id="entryTitle">
+            </div>
+
+            <div class="form-group">
+                <label>Datum</label>
+                <input type="date" id="entryDate">
+            </div>
+
+            <div class="form-group">
+                <label>Inhalt</label>
+                <textarea id="entryContent"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Zeichnung</label>
+                <canvas id="drawingCanvas" class="drawing-canvas" width="540" height="300"></canvas>
+                <div class="canvas-controls">
+                    <button class="canvas-btn" id="clearCanvas">Löschen</button>
+                </div>
+                <div class="color-picker" id="colorPicker"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Bilder</label>
+                <input type="file" id="imageInput" accept="image/*" multiple>
+                <div id="imagePreview" class="image-preview"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Tags</label>
+                <div class="tag-input-wrapper">
+                    <input type="text" id="tagInput">
+                    <button id="addTagBtn">+</button>
+                </div>
+                <div id="tagsDisplay" class="tags-display"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Links</label>
+                <div class="tag-input-wrapper">
+                    <input type="text" id="linkTitle" placeholder="Titel">
+                    <input type="url" id="linkUrl" placeholder="URL">
+                    <button id="addLinkBtn">+</button>
+                </div>
+                <div id="linksDisplay" class="links-list"></div>
+            </div>
+
+            <button class="btn-primary" id="saveBtn">Speichern</button>
+        </div>
+    </div>
+
+    <script>
+        // Globale Variablen
+        const app = {
+            entries: [],
+            currentView: 'list',
+            currentPage: 0,
+            editingId: null,
+            currentTags: [],
+            currentLinks: [],
+            currentImages: [],
+            isDrawing: false,
+            color: 'black',
+            canvas: null,
+            ctx: null
+        };
+
+        // Initialisierung
+        document.addEventListener('DOMContentLoaded', function() {
+            app.canvas = document.getElementById('drawingCanvas');
+            app.ctx = app.canvas.getContext('2d');
+            app.ctx.lineWidth = 2;
+            app.ctx.lineCap = 'round';
+
+            loadEntries();
+            initEventListeners();
+            renderView();
+        });
+
+        function initEventListeners() {
+            // View Toggle
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    app.currentView = this.dataset.view;
+                    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    renderView();
+                });
+            });
+
+            // Add Button
+            document.getElementById('addBtn').addEventListener('click', function() {
+                openModal();
+            });
+
+            // Modal schließen
+            document.getElementById('closeModal').addEventListener('click', closeModal);
+
+            // Speichern
+            document.getElementById('saveBtn').addEventListener('click', saveEntry);
+
+            // Suche
+            document.getElementById('searchInput').addEventListener('input', function(e) {
+                renderView(e.target.value);
+            });
+
+            // Tags
+            document.getElementById('addTagBtn').addEventListener('click', addTag);
+            document.getElementById('tagInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag();
+                }
+            });
+
+            // Links
+            document.getElementById('addLinkBtn').addEventListener('click', addLink);
+
+            // Canvas löschen
+            document.getElementById('clearCanvas').addEventListener('click', function() {
+                app.ctx.clearRect(0, 0, app.canvas.width, app.canvas.height);
+            });
+
+            // Bilder
+            document.getElementById('imageInput').addEventListener('change', handleImages);
+
+            // Farben
+            initColorPicker();
+
+            // Drawing
+            setupDrawing();
+        }
+
+        function initColorPicker() {
+            const colors = ['black', '#4A90E2', '#E53935', '#43A047', '#FB8C00'];
+            const picker = document.getElementById('colorPicker');
+            
+            colors.forEach((color, index) => {
+                const div = document.createElement('div');
+                div.className = 'color-option' + (index === 0 ? ' active' : '');
+                div.style.background = color;
+                div.addEventListener('click', function() {
+                    document.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
+                    this.classList.add('active');
+                    app.color = color;
+                    app.ctx.strokeStyle = color;
+                });
+                picker.appendChild(div);
+            });
+        }
+
+        function setupDrawing() {
+            let lastX = 0;
+            let lastY = 0;
+
+            app.canvas.addEventListener('mousedown', function(e) {
+                app.isDrawing = true;
+                const rect = app.canvas.getBoundingClientRect();
+                lastX = e.clientX - rect.left;
+                lastY = e.clientY - rect.top;
+            });
+
+            app.canvas.addEventListener('mousemove', function(e) {
+                if (!app.isDrawing) return;
+                const rect = app.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                app.ctx.strokeStyle = app.color;
+                app.ctx.beginPath();
+                app.ctx.moveTo(lastX, lastY);
+                app.ctx.lineTo(x, y);
+                app.ctx.stroke();
+                
+                lastX = x;
+                lastY = y;
+            });
+
+            app.canvas.addEventListener('mouseup', function() {
+                app.isDrawing = false;
+            });
+
+            app.canvas.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                app.isDrawing = true;
+                const rect = app.canvas.getBoundingClientRect();
+                lastX = e.touches[0].clientX - rect.left;
+                lastY = e.touches[0].clientY - rect.top;
+            });
+
+            app.canvas.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                if (!app.isDrawing) return;
+                const rect = app.canvas.getBoundingClientRect();
+                const x = e.touches[0].clientX - rect.left;
+                const y = e.touches[0].clientY - rect.top;
+                
+                app.ctx.strokeStyle = app.color;
+                app.ctx.beginPath();
+                app.ctx.moveTo(lastX, lastY);
+                app.ctx.lineTo(x, y);
+                app.ctx.stroke();
+                
+                lastX = x;
+                lastY = y;
+            });
+
+            app.canvas.addEventListener('touchend', function() {
+                app.isDrawing = false;
+            });
+        }
+
+        function openModal(entryId) {
+            const entry = entryId ? app.entries.find(e => e.id === entryId) : null;
+            
+            app.editingId = entryId || null;
+            app.currentTags = entry ? [...entry.tags] : [];
+            app.currentLinks = entry ? [...entry.links] : [];
+            app.currentImages = entry ? [...entry.images] : [];
+
+            document.getElementById('modalTitle').textContent = entry ? 'Bearbeiten' : 'Neuer Eintrag';
+            document.getElementById('entryTitle').value = entry ? entry.title : '';
+            document.getElementById('entryDate').value = entry ? entry.date : new Date().toISOString().split('T')[0];
+            document.getElementById('entryContent').value = entry ? entry.content : '';
+            
+            app.ctx.clearRect(0, 0, app.canvas.width, app.canvas.height);
+            if (entry && entry.drawing) {
+                const img = new Image();
+                img.onload = function() {
+                    app.ctx.drawImage(img, 0, 0);
+                };
+                img.src = entry.drawing;
+            }
+
+            const preview = document.getElementById('imagePreview');
+            preview.innerHTML = '';
+            app.currentImages.forEach(src => {
+                const img = document.createElement('img');
+                img.src = src;
+                preview.appendChild(img);
+            });
+
+            renderTags();
+            renderLinks();
+            document.getElementById('entryModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('entryModal').classList.remove('active');
+        }
+
+        function addTag() {
+            const input = document.getElementById('tagInput');
+            const tag = input.value.trim();
+            if (tag && !app.currentTags.includes(tag)) {
+                app.currentTags.push(tag);
+                input.value = '';
+                renderTags();
+            }
+        }
+
+        function renderTags() {
+            const container = document.getElementById('tagsDisplay');
+            container.innerHTML = '';
+            
+            app.currentTags.forEach(tag => {
+                const div = document.createElement('div');
+                div.className = 'tag-item';
+                div.innerHTML = tag;
+                
+                const btn = document.createElement('button');
+                btn.className = 'tag-remove';
+                btn.innerHTML = '×';
+                btn.addEventListener('click', function() {
+                    app.currentTags = app.currentTags.filter(t => t !== tag);
+                    renderTags();
+                });
+                
+                div.appendChild(btn);
+                container.appendChild(div);
+            });
+        }
+
+        function addLink() {
+            const title = document.getElementById('linkTitle').value.trim();
+            const url = document.getElementById('linkUrl').value.trim();
+            
+            if (title && url) {
+                app.currentLinks.push({ id: Date.now(), title: title, url: url });
+                document.getElementById('linkTitle').value = '';
+                document.getElementById('linkUrl').value = '';
+                renderLinks();
+            }
+        }
+
+        function renderLinks() {
+            const container = document.getElementById('linksDisplay');
+            container.innerHTML = '';
+            
+            app.currentLinks.forEach(link => {
+                const div = document.createElement('div');
+                div.className = 'link-item';
+                
+                const a = document.createElement('a');
+                a.href = link.url;
+                a.target = '_blank';
+                a.textContent = link.title;
+                
+                const btn = document.createElement('button');
+                btn.className = 'tag-remove';
+                btn.innerHTML = '×';
+                btn.addEventListener('click', function() {
+                    app.currentLinks = app.currentLinks.filter(l => l.id !== link.id);
+                    renderLinks();
+                });
+                
+                div.appendChild(a);
+                div.appendChild(btn);
+                container.appendChild(div);
+            });
+        }
+
+        function handleImages(e) {
+            Array.from(e.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    app.currentImages.push(event.target.result);
+                    const img = document.createElement('img');
+                    img.src = event.target.result;
+                    document.getElementById('imagePreview').appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function saveEntry() {
+            const title = document.getElementById('entryTitle').value.trim() || 'Ohne Titel';
+            const date = document.getElementById('entryDate').value;
+            const content = document.getElementById('entryContent').value.trim();
+            const drawingData = app.canvas.toDataURL();
+            const imageData = app.ctx.getImageData(0, 0, app.canvas.width, app.canvas.height);
+            const isEmpty = !imageData.data.some(c => c !== 0);
+
+            const entry = {
+                id: app.editingId || Date.now(),
+                title: title,
+                date: date,
+                content: content,
+                tags: [...app.currentTags],
+                links: [...app.currentLinks],
+                images: [...app.currentImages],
+                drawing: isEmpty ? null : drawingData
+            };
+
+            if (app.editingId) {
+                const idx = app.entries.findIndex(e => e.id === app.editingId);
+                app.entries[idx] = entry;
+            } else {
+                app.entries.unshift(entry);
+            }
+
+            saveEntries();
+            closeModal();
+            renderView();
+        }
+
+        function renderView(search) {
+            const searchTerm = search || '';
+            const filtered = searchTerm ? app.entries.filter(e =>
+                e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                e.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                e.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()))
+            ) : app.entries;
+
+            if (app.currentView === 'list') {
+                document.getElementById('listView').style.display = 'grid';
+                document.getElementById('bookView').style.display = 'none';
+                renderList(filtered);
+            } else {
+                document.getElementById('listView').style.display = 'none';
+                document.getElementById('bookView').style.display = 'block';
+                renderBook(filtered);
+            }
+        }
+
+        function renderList(list) {
+            const container = document.getElementById('listView');
+            
+            if (list.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h2>Noch keine Einträge</h2><p>Drücke auf + um loszulegen</p></div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            
+            list.forEach(entry => {
+                const card = document.createElement('div');
+                card.className = 'entry-card';
+                
+                const h3 = document.createElement('h3');
+                h3.textContent = entry.title;
+                card.appendChild(h3);
+                
+                const p = document.createElement('p');
+                p.textContent = entry.content.substring(0, 150) + (entry.content.length > 150 ? '...' : '');
+                card.appendChild(p);
+                
+                if (entry.images.length > 0) {
+                    const imagesDiv = document.createElement('div');
+                    imagesDiv.className = 'entry-images';
+                    entry.images.slice(0, 3).forEach(imgSrc => {
+                        const img = document.createElement('img');
+                        img.src = imgSrc;
+                        imagesDiv.appendChild(img);
+                    });
+                    card.appendChild(imagesDiv);
+                }
+                
+                if (entry.drawing) {
+                    const drawDiv = document.createElement('div');
+                    drawDiv.className = 'entry-drawing';
+                    const img = document.createElement('img');
+                    img.src = entry.drawing;
+                    drawDiv.appendChild(img);
+                    card.appendChild(drawDiv);
+                }
+                
+                const meta = document.createElement('div');
+                meta.className = 'entry-meta';
+                
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'entry-date';
+                dateSpan.textContent = new Date(entry.date).toLocaleDateString('de-DE');
+                meta.appendChild(dateSpan);
+                
+                const tagsDiv = document.createElement('div');
+                tagsDiv.className = 'tags';
+                entry.tags.slice(0, 3).forEach(tag => {
+                    const tagSpan = document.createElement('span');
+                    tagSpan.className = 'tag';
+                    tagSpan.textContent = tag;
+                    tagsDiv.appendChild(tagSpan);
+                });
+                meta.appendChild(tagsDiv);
+                
+                card.appendChild(meta);
+                
+                card.addEventListener('click', function() {
+                    openModal(entry.id);
+                });
+                
+                container.appendChild(card);
+            });
+        }
+
+        function renderBook(list) {
+            const container = document.getElementById('bookView');
+            
+            if (list.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h2>Noch keine Einträge</h2></div>';
+                return;
+            }
+
+            const entry = list[app.currentPage];
+            container.innerHTML = '';
+            
+            const page = document.createElement('div');
+            page.className = 'book-page';
+            
+            const h2 = document.createElement('h2');
+            h2.textContent = entry.title;
+            page.appendChild(h2);
+            
+            const dateP = document.createElement('p');
+            dateP.style.cssText = 'color:#999;margin:10px 0';
+            dateP.textContent = new Date(entry.date).toLocaleDateString('de-DE');
+            page.appendChild(dateP);
+            
+            const hr = document.createElement('hr');
+            hr.style.margin = '20px 0';
+            page.appendChild(hr);
+            
+            const contentP = document.createElement('p');
+            contentP.style.lineHeight = '1.8';
+            contentP.textContent = entry.content;
+            page.appendChild(contentP);
+            
+            if (entry.images.length > 0) {
+                const imagesDiv = document.createElement('div');
+                imagesDiv.className = 'entry-images';
+                entry.images.forEach(imgSrc => {
+                    const img = document.createElement('img');
+                    img.src = imgSrc;
+                    imagesDiv.appendChild(img);
+                });
+                page.appendChild(imagesDiv);
+            }
+            
+            if (entry.drawing) {
+                const drawDiv = document.createElement('div');
+                drawDiv.className = 'entry-drawing';
+                const img = document.createElement('img');
+                img.src = entry.drawing;
+                drawDiv.appendChild(img);
+                page.appendChild(drawDiv);
+            }
+            
+            if (entry.tags.length > 0) {
+                const tagsDiv = document.createElement('div');
+                tagsDiv.className = 'tags';
+                tagsDiv.style.marginTop = '20px';
+                entry.tags.forEach(tag => {
+                    const tagSpan = document.createElement('span');
+                    tagSpan.className = 'tag';
+                    tagSpan.textContent = tag;
+                    tagsDiv.appendChild(tagSpan);
+                });
+                page.appendChild(tagsDiv);
+            }
+            
+            if (entry.links.length > 0) {
+                const linksDiv = document.createElement('div');
+                linksDiv.className = 'links-list';
+                entry.links.forEach(link => {
+                    const linkItem = document.createElement('div');
+                    linkItem.className = 'link-item';
+                    const a = document.createElement('a');
+                    a.href = link.url;
+                    a.target = '_blank';
+                    a.textContent = link.title;
+                    linkItem.appendChild(a);
+                    linksDiv.appendChild(linkItem);
+                });
+                page.appendChild(linksDiv);
+            }
+            
+            container.appendChild(page);
+            
+            const controls = document.createElement('div');
+            controls.className = 'page-controls';
+            
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'page-btn';
+            prevBtn.textContent = '◀ Zurück';
+            prevBtn.disabled = app.currentPage === 0;
+            prevBtn.addEventListener('click', function() {
+                app.currentPage--;
+                renderView();
+            });
+            controls.appendChild(prevBtn);
+            
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'page-btn';
+            nextBtn.textContent = 'Weiter ▶';
+            nextBtn.disabled = app.currentPage === list.length - 1;
+            nextBtn.addEventListener('click', function() {
+                app.currentPage++;
+                renderView();
+            });
+            controls.appendChild(nextBtn);
+            
+            container.appendChild(controls);
+            
+            const pageNum = document.createElement('div');
+            pageNum.style.cssText = 'text-align:center;color:white;margin-top:10px';
+            pageNum.textContent = 'Seite ' + (app.currentPage + 1) + ' von ' + list.length;
+            container.appendChild(pageNum);
+        }
+
+        function loadEntries() {
+            try {
+                const saved = localStorage.getItem('journalEntries');
+                app.entries = saved ? JSON.parse(saved) : [];
+            } catch (e) {
+                console.error('Fehler beim Laden:', e);
+                app.entries = [];
+            }
+        }
+
+        function saveEntries() {
+            try {
+                localStorage.setItem('journalEntries', JSON.stringify(app.entries));
+            } catch (e) {
+                console.error('Fehler beim Speichern:', e);
+            }
+        }
+    </script>
+</body>
+</html>
